@@ -9,6 +9,7 @@ const PreferencesSchema = z.object({
   location: z.string().min(1).max(255).optional(),
   minSalary: z.number().int().nonnegative().optional(),
   keywords: z.string().min(1).optional(),
+  autoApply: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       return zodError(parsed.error);
     }
 
-    const { email, title, location, minSalary, keywords } = parsed.data;
+    const { email, title, location, minSalary, keywords, autoApply } = parsed.data;
 
     const preference = await prisma.preference.upsert({
       where: { email },
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
         location,
         minSalary,
         keywords,
+        ...(autoApply !== undefined && { autoApply }),
       },
       create: {
         email,
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
         location,
         minSalary,
         keywords,
+        autoApply: autoApply ?? false,
       },
     });
 

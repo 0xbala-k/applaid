@@ -14,6 +14,7 @@ model Preference {
   location   String?
   minSalary  Int?
   keywords   String?
+  autoApply  Boolean  @default(false) @map("auto_apply")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
   resumes    Resume[]

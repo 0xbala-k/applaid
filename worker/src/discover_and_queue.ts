@@ -275,6 +275,18 @@ export async function discover_and_queue(): Promise<void> {
       scoreThreshold: SCORE_THRESHOLD,
     });
 
+    // Log actual leads when DISCOVER_DEBUG_LEADS=true (see data from Tavily)
+    if (process.env.DISCOVER_DEBUG_LEADS === "true" && selected.length > 0) {
+      log("info", "discover_and_queue.leads_detail", {
+        preferenceId: pref.id,
+        leads: selected.map((r) => ({
+          title: r.title,
+          url: r.url,
+          score: r.score,
+        })),
+      });
+    }
+
     if (selected.length === 0) {
       continue;
     }

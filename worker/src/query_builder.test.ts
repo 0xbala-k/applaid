@@ -23,7 +23,8 @@ describe("buildQueries", () => {
 
   it("puts broadest discovery query first", () => {
     const q = buildQueries({ title: "Data Scientist" });
-    expect(q[0]).toBe("Data Scientist job openings hiring now");
+    expect(q[0]).toContain("Data Scientist job openings hiring now");
+    expect(q[0]).toContain("company career page or job page with apply form direct apply");
   });
 
   it("generates location-scoped query", () => {
@@ -42,7 +43,7 @@ describe("buildQueries", () => {
       location: "Austin",
       remote_ok: true,
     });
-    expect(q).toContain("Engineer jobs in Austin OR remote");
+    expect(q.some((s) => s.includes("Engineer jobs in Austin OR remote"))).toBe(true);
   });
 
   it("includes keywords in skill-targeted query", () => {
@@ -112,7 +113,8 @@ describe("buildQueries", () => {
       include_keywords: ["Rust", "Go"],
       exclude_keywords: ["Java"],
     });
-    expect(q[0]).toBe("Backend Engineer job openings hiring now");
+    expect(q[0]).toContain("Backend Engineer job openings hiring now");
+    expect(q[0]).toContain("direct apply");
     expect(q[q.length - 1]).toContain("-Java");
   });
 
@@ -123,6 +125,14 @@ describe("buildQueries", () => {
     expect(q.some((s) => s.includes("careers") || s.includes("hiring"))).toBe(
       true,
     );
+  });
+
+  it("appends direct-apply phrase so Tavily returns pages with application form", () => {
+    const q = buildQueries({ title: "Engineer" });
+    const phrase = "company career page or job page with apply form direct apply";
+    for (const query of q) {
+      expect(query).toContain(phrase);
+    }
   });
 });
 

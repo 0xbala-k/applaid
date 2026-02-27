@@ -38,10 +38,20 @@ const MIN_QUERIES = 3;
 const MAX_QUERIES = 6;
 const MULTI_QUERY_BONUS = 0.05;
 
+/**
+ * Phrase appended to every Tavily query so the API returns pages where the
+ * user can apply directly (company career / ATS pages with an application
+ * form), not job board listing pages that redirect elsewhere.
+ */
+const DIRECT_APPLY_QUERY_SUFFIX =
+  "company career page or job page with apply form direct apply";
+
 // ── Query Builder ──────────────────────────────────────────────────────
 
 /**
  * Generates 3–6 diverse Tavily search queries ordered broad → narrow.
+ * Each query includes a phrase asking for pages with an application form
+ * (so results are company career / ATS pages, not job board redirects).
  *
  * Layers:
  *  1. Discovery   – title only (maximum recall)
@@ -65,23 +75,23 @@ export function buildQueries(prefs: SearchPreferences): string[] {
     .map((k) => k.trim())
     .filter(Boolean);
 
-  const queries: string[] = [];
+  const raw: string[] = [];
 
   // Layer 1 — Discovery (broadest)
-  queries.push(`${title} job openings hiring now`);
+  raw.push(`${title} job openings hiring now`);
 
   // Layer 2 — Location / remote scoped
   if (location && remote) {
-    queries.push(`${title} jobs in ${location} OR remote`);
+    raw.push(`${title} jobs in ${location} OR remote`);
   } else if (location) {
-    queries.push(`${title} jobs in ${location}`);
+    raw.push(`${title} jobs in ${location}`);
   } else if (remote) {
-    queries.push(`${title} remote jobs`);
+    raw.push(`${title} remote jobs`);
   }
 
   // Layer 3 — Skill-targeted
   if (include.length > 0) {
-    queries.push(`${title} ${include.slice(0, 4).join(" ")} job postings`);
+    raw.push(`${title} ${include.slice(0, 4).join(" ")} job postings`);
   }
 
   // Layer 4 — Location + skills combined
@@ -91,7 +101,7 @@ export function buildQueries(prefs: SearchPreferences): string[] {
         ? `${location} remote`
         : "remote"
       : location!;
-    queries.push(`${title} ${include.slice(0, 3).join(" ")} jobs ${loc}`);
+    raw.push(`${title} ${include.slice(0, 3).join(" ")} jobs ${loc}`);
   }
 
   // Layer 5 — Compensation-focused
@@ -99,7 +109,7 @@ export function buildQueries(prefs: SearchPreferences): string[] {
     let q = `${title} jobs salary above $${salary}`;
     if (location) q += ` ${location}`;
     if (remote) q += " remote";
-    queries.push(q);
+    raw.push(q);
   }
 
   // Layer 6 — Precision (narrowest, includes exclusions)
@@ -109,18 +119,20 @@ export function buildQueries(prefs: SearchPreferences): string[] {
   if (remote) parts.push("remote");
   if (salary !== null) parts.push(`$${salary}+`);
   if (exclude.length > 0) parts.push(exclude.map((k) => `-${k}`).join(" "));
-  queries.push(`${parts.join(" ")} job listing`);
+  raw.push(`${parts.join(" ")} job listing`);
 
   // Pad to minimum with alternative phrasings
-  if (queries.length < MIN_QUERIES) {
-    queries.push(`${title} careers opportunities apply`);
+  if (raw.length < MIN_QUERIES) {
+    raw.push(`${title} careers opportunities apply`);
   }
-  if (queries.length < MIN_QUERIES) {
-    queries.push(`hiring ${title} open positions`);
+  if (raw.length < MIN_QUERIES) {
+    raw.push(`hiring ${title} open positions`);
   }
 
-  // Deduplicate and cap at MAX_QUERIES
-  return [...new Set(queries)].slice(0, MAX_QUERIES);
+  // Deduplicate, cap at MAX_QUERIES, and append direct-apply instruction so
+  // Tavily returns pages with application forms (company/ATS), not job boards
+  const unique = [...new Set(raw)].slice(0, MAX_QUERIES);
+  return unique.map((q) => `${q} ${DIRECT_APPLY_QUERY_SUFFIX}`);
 }
 
 // ── URL Canonicalization ───────────────────────────────────────────────

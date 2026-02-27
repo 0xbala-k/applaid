@@ -13,6 +13,8 @@
     "worker": "npm run start --workspace worker",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:clear": "npm run db:clear --workspace worker",
+    "db:reset": "prisma migrate reset --force",
     "lint": "npm run lint --workspace web",
     "test": "echo \"No tests yet\""
   },

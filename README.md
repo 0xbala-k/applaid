@@ -255,6 +255,38 @@ npm run dev
 npm run worker
 ```
 
+### 6️⃣ Manual verification (Yutori apply)
+
+To test the real Yutori Browsing API integration end-to-end:
+
+1. **Set your API key**  
+   In `.env` (at repo root), set:
+   ``` env
+   YUTORI_API_KEY=your-yutori-api-key
+   ```
+   (If `YUTORI_API_KEY` is unset, the worker uses the stub adapter and no real browser runs.)
+
+2. **Create a test ApplyTask**  
+   From repo root, create one QUEUED task (plus Preference, Resume, JobLead if needed):
+   ``` bash
+   cd worker && npm run seed:test-apply
+   ```
+   This seeds a single QUEUED apply task for `test-apply@example.com` pointing at `https://example.com/job/123`.
+
+3. **Run the apply step once**  
+   From repo root:
+   ``` bash
+   cd worker && npm run apply:once
+   ```
+   Or run the full worker (discover + apply on boot, then cron):
+   ``` bash
+   npm run worker
+   ```
+
+4. **Confirm in logs**  
+   - You should see `"event":"apply_and_update.adapter","adapter":"YutoriBrowsingAdapter"` when the key is set.
+   - With the real API, logs will show task creation and status polling (and any errors from the Yutori API).
+
 ------------------------------------------------------------------------
 
 ## ⏰ Cron (Render)
