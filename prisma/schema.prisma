@@ -8,12 +8,112 @@ datasource db {
 }
 
 model Preference {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  title     String?
-  location  String?
-  minSalary Int?
-  keywords  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  email      String   @unique
+  title      String?
+  location   String?
+  minSalary  Int?
+  keywords   String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  resumes    Resume[]
+  jobLeads   JobLead[]
+
+  @@map("preferences")
 }
+
+model Resume {
+  id           String      @id @default(cuid())
+  preference   Preference? @relation(fields: [preferenceId], references: [id])
+  preferenceId String?     @map("preference_id")
+
+  label        String
+  // Location of the stored resume (object storage path, URL, etc.)
+  storageKey   String      @map("storage_key")
+
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@map("resumes")
+}
+
+model JobLead {
+  id            String      @id @default(cuid())
+  preference    Preference? @relation(fields: [preferenceId], references: [id])
+  preferenceId  String?     @map("preference_id")
+
+  title         String
+  company       String
+  location      String?
+  url           String
+  source        String?     // e.g. "tavily", "manual"
+  score         Float?      // relevance score from Tavily or other ranking
+
+  // Used to deduplicate job leads across runs
+  dedupeHash    String      @map("dedupe_hash")
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  applyTasks    ApplyTask[]
+  emailEvents   EmailEvent[]
+
+  @@index([dedupeHash], map: "job_leads_dedupe_hash_idx")
+  @@map("job_leads")
+}
+
+enum ApplyTaskStatus {
+  QUEUED
+  PREFILLED
+  SUBMITTED
+  NEEDS_OTP
+  CONFIRMED
+  REJECTED
+  FAILED
+}
+
+model ApplyTask {
+  id         String          @id @default(cuid())
+
+  jobLead    JobLead         @relation(fields: [jobLeadId], references: [id])
+  jobLeadId  String          @map("job_lead_id")
+
+  status     ApplyTaskStatus
+  runAt      DateTime?       @map("run_at")
+  lastError  String?         @map("last_error")
+
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  @@index([jobLeadId, status], map: "apply_tasks_job_lead_id_status_idx")
+  @@map("apply_tasks")
+}
+
+enum EmailEventType {
+  OTP
+  RECEIPT
+  REJECTION
+  OTHER
+}
+
+model EmailEvent {
+  id          String       @id @default(cuid())
+
+  jobLead     JobLead?     @relation(fields: [jobLeadId], references: [id])
+  jobLeadId   String?      @map("job_lead_id")
+
+  type        EmailEventType
+  messageId   String       @map("message_id")
+  subject     String?
+  fromAddress String?      @map("from_address")
+  toAddress   String?      @map("to_address")
+
+  // Raw structured payload from Gmail MCP, for future parsing
+  payload     Json?
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("email_events")
+}
+
