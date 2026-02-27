@@ -1,41 +1,43 @@
-import "dotenv/config";
 import cron from "node-cron";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-async function runDiscoveryAndQueue() {
-  const preferences = await prisma.preference.findMany();
-
-  console.log(
-    `[worker] Running discovery for ${preferences.length} preference profile(s) at ${new Date().toISOString()}`
-  );
-
-  // Placeholder: here you would call Tavily, Yutori, Gmail MCP, etc.
-  // For now we just log the preferences that would drive the search.
-  for (const pref of preferences) {
-    console.log(
-      `[worker] Preference: ${pref.email} | ${pref.title ?? "any title"} | ${
-        pref.location ?? "anywhere"
-      } | min $${pref.minSalary ?? "n/a"} | keywords=${pref.keywords ?? ""}`
-    );
-  }
-}
+import { discover_and_queue } from "./discover_and_queue";
 
 async function bootstrap() {
-  console.log("[worker] Starting cron worker");
+  console.log(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "info",
+      event: "worker.bootstrap_start",
+    }),
+  );
 
   // Run once on boot
-  await runDiscoveryAndQueue();
+  await discover_and_queue();
 
-  // Then every hour, aligned with your README
+  // Then every hour, aligned with the README
   cron.schedule("0 * * * *", async () => {
-    await runDiscoveryAndQueue();
+    console.log(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        level: "info",
+        event: "worker.cron_tick",
+      }),
+    );
+
+    await discover_and_queue();
   });
 }
 
-bootstrap().catch((err) => {
-  console.error("[worker] Fatal error", err);
+bootstrap().catch((err: unknown) => {
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      event: "worker.fatal",
+      error:
+        err instanceof Error
+          ? { message: err.message, stack: err.stack }
+          : { message: String(err) },
+    }),
+  );
   process.exit(1);
 });
-
