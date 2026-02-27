@@ -89,6 +89,125 @@ applaid runs as a scheduled autonomous agent that:
 
 ------------------------------------------------------------------------
 
+## 📡 HTTP API
+
+All API responses share a consistent envelope:
+
+- **Success**:  
+  `200`–`299`
+
+  ```json
+  {
+    "success": true,
+    "data": { "...route specific..." }
+  }
+  ```
+
+- **Error**:  
+  `4xx` or `5xx`
+
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "BAD_REQUEST | VALIDATION_ERROR | NOT_FOUND | INTERNAL_SERVER_ERROR",
+      "message": "Human readable message",
+      "details": { "...optional extra context..." }
+    }
+  }
+  ```
+
+Validation is handled with **zod**; invalid input returns `400` with `code = "VALIDATION_ERROR"`.
+
+### `POST /api/preferences`
+
+- **Purpose**: Upsert job search preferences by email.
+- **Body**:
+
+  ```json
+  {
+    "email": "user@example.com",
+    "title": "Software Engineer",
+    "location": "Remote",
+    "minSalary": 150000,
+    "keywords": "java, go, solidity"
+  }
+  ```
+
+- **Notes**:
+  - `email` is required and used as the upsert key.
+  - Returns the saved `preference` record.
+
+### `POST /api/resume`
+
+- **Purpose**: Ingest a resume as plain text and extract keywords.
+- **Body**:
+
+  ```json
+  {
+    "label": "Main resume",
+    "text": "Full resume text here...",
+    "email": "user@example.com"
+  }
+  ```
+
+  - `label`: Required, short identifier for this resume.
+  - `text`: Required, raw resume text (stored as `rawText`).
+  - One of `email` or `preferenceId` is required.
+
+- **Behavior**:
+  - Looks up (or creates) a `Preference` by `email` if needed.
+  - Stores:
+    - `rawText` (full text)
+    - `keywords` (top extracted tokens)
+    - `storageKey = "inline"` for text-stored resumes.
+  - **Response** includes:
+    - The created `resume` record.
+    - `keywords`: array of extracted keyword strings.
+
+### `GET /api/leads?minScore=0.8`
+
+- **Purpose**: Fetch discovered job leads above a given relevance score.
+- **Query params**:
+  - `minScore` (optional, default `0.8`): number in \[0, 1\].
+
+- **Behavior**:
+  - Returns up to 100 `JobLead`s where:
+    - `score >= minScore` **or** `score` is `null`.
+  - Sorted by `score desc`, then `createdAt desc`.
+  - Includes:
+    - Basic associated `preference` (email, title, etc.).
+    - Latest `ApplyTask` for each lead (status, last error, run time).
+
+### `GET /api/tasks`
+
+- **Purpose**: Inspect apply tasks and their latest state.
+- **Query params**:
+  - `status` (optional): one of  
+    `QUEUED | PREFILLED | SUBMITTED | NEEDS_OTP | CONFIRMED | REJECTED | FAILED`
+  - `limit` (optional): integer, default `50`, max `200`.
+
+- **Behavior**:
+  - Returns recent `ApplyTask`s, optionally filtered by status.
+  - Sorted by `createdAt desc`.
+  - Each task includes its associated `JobLead` (title, company, url, score).
+
+### `POST /api/tasks/:id/retry`
+
+- **Purpose**: Reset an `ApplyTask` so the worker can retry it.
+- **Params**:
+  - `id`: `ApplyTask.id` (path param).
+
+- **Behavior**:
+  - If the task exists, sets:
+    - `status = "QUEUED"`
+    - `runAt = null`
+    - `lastError = null`
+  - Returns the updated task plus its `JobLead`.
+  - If the task is missing, returns `404` with `code = "NOT_FOUND"`.
+
+------------------------------------------------------------------------
+
 ## 🔐 Safety Features
 
 -   Per-domain throttling

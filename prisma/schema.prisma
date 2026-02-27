@@ -28,8 +28,11 @@ model Resume {
   preferenceId String?     @map("preference_id")
 
   label        String
-  // Location of the stored resume (object storage path, URL, etc.)
+  // Location of the stored resume (object storage path, URL, etc.) or a sentinel
+  // value such as "inline" when the rawText is stored directly in the database.
   storageKey   String      @map("storage_key")
+  rawText      String?     @map("raw_text")
+  keywords     String?
 
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
