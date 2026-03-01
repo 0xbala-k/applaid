@@ -3,3 +3,4 @@ node_modules
 web/.next
 worker/dist
 .env
+web/.env.local

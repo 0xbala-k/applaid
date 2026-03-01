@@ -44,7 +44,7 @@ const MULTI_QUERY_BONUS = 0.05;
  * form), not job board listing pages that redirect elsewhere.
  */
 const DIRECT_APPLY_QUERY_SUFFIX =
-  "company career page or job page with apply form direct apply";
+  "only return urls that have application forms. company career page or job page with apply form direct apply. ignore websites like indeed, linkedin, ziprecruiter";
 
 // ── Query Builder ──────────────────────────────────────────────────────
 

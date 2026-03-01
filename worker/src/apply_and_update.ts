@@ -152,8 +152,8 @@ export async function apply_and_update(): Promise<void> {
               .filter(Boolean)
           : undefined,
       },
-      // Respect user's auto-apply preference: when true, submit; when false, prefill only
-      submit: pref.autoApply,
+      // Tell Yutori to submit the application (fill and click Submit/Apply)
+      submit: true,
     };
 
     // Claim the task

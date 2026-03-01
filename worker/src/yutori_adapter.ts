@@ -139,7 +139,7 @@ function buildTaskPrompt(input: ApplyRunnerInput, submit: boolean): string {
   lines.push(
     submit
       ? "After filling all fields, click Submit/Apply."
-      : "Fill all fields but DO NOT click Submit. Stop before submission.",
+      : "After filling all fields, click Submit/Apply.",
   );
   lines.push(
     "If you encounter a CAPTCHA or are blocked, stop and report it.",
