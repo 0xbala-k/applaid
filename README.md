@@ -1,6 +1,6 @@
 # 🧥 applaid
 
-> Autonomous Job Application Agent  
+> Autonomous Job Application Agent
 > Resume in → Offers out (in theory).
 
 applaid automates the full job application lifecycle — from resume input
@@ -15,12 +15,12 @@ Built for hackathons. Designed for job hunters. Slightly unhinged.
 
 applaid runs as a scheduled autonomous agent that:
 
-1.  Ingests your resume + job preferences  
-2.  Finds new matching roles every hour  
-3.  Scores and ranks them automatically  
-4.  Applies via browser automation  
-5.  Handles OTP verification through Gmail  
-6.  Tracks confirmations & rejections  
+1.  Ingests your resume + job preferences
+2.  Finds new matching roles every hour
+3.  Scores and ranks them automatically
+4.  Applies via cloud browser automation (Browserbase + Stagehand)
+5.  Handles OTP verification through Gmail
+6.  Tracks confirmations & rejections
 7.  Displays everything in a live dashboard
 
 ------------------------------------------------------------------------
@@ -33,7 +33,7 @@ applaid runs as a scheduled autonomous agent that:
             ↓
        Filter Top Matches
             ↓
-       Yutori (Auto Apply)
+       Browserbase + Stagehand (Auto Apply)
             ↓
        Gmail MCP (OTP + Status)
             ↓
@@ -45,28 +45,48 @@ applaid runs as a scheduled autonomous agent that:
 
 ### Core Stack
 
-| Component  | Role                              |
-|------------|-----------------------------------|
-| Tavily API | Job discovery + relevance scoring |
-| Yutori MCP | Browser automation + form filling |
-| Gmail MCP  | OTP extraction + status parsing   |
-| Airbyte    | Email/job sync into DB            |
-| Postgres   | State management                  |
-| Render     | Deployment + cron scheduling      |
+| Component              | Role                                        |
+|------------------------|---------------------------------------------|
+| Tavily API             | Job discovery + relevance scoring           |
+| Browserbase            | Cloud browser sessions + concurrency mgmt   |
+| Stagehand              | AI-powered form filling + browser actions   |
+| Gmail MCP              | OTP extraction + status parsing             |
+| Airbyte                | Email/job sync into DB                      |
+| Postgres               | State management                            |
+| Render                 | Deployment + cron scheduling                |
 
 ------------------------------------------------------------------------
 
-## ⚙️ Workflow
+## ⚙️ How Browser Automation Works
 
-| Step | Action                                  |
-|------|-----------------------------------------|
-| 1    | User submits resume + preferences       |
-| 2    | Cron job runs hourly search             |
-| 3    | Top matches (score \> threshold) queued |
-| 4    | Auto-apply task triggered               |
-| 5    | OTP fetched from Gmail if required      |
-| 6    | Status stored in DB                     |
-| 7    | Dashboard updates in real-time          |
+applaid uses **[Browserbase](https://www.browserbase.com)** as the cloud browser infrastructure
+and **[Stagehand](https://docs.stagehand.dev)** as the AI-driven automation layer to fill and
+submit job applications.
+
+### Flow per Application
+
+```
+1. Create Stagehand session  →  Browserbase spins up a cloud browser
+2. Navigate to job URL       →  page.goto(jobUrl)
+3. Detect form fields        →  stagehand.observe() / stagehand.act()
+4. Fill applicant data       →  stagehand.act("type 'Ada Lovelace' into the name field")
+5. Upload resume             →  observe file input → setInputFiles(resumePdf)
+6. Submit                    →  stagehand.act("click the submit button")
+7. Detect result             →  stagehand.extract() → SUBMITTED / NEEDS_OTP / BLOCKED
+8. Close session             →  stagehand.close()
+```
+
+### Concurrency
+
+Browserbase project limits cap how many simultaneous browser sessions can run.
+A semaphore pattern (based on [Browserbase's job-application template](https://www.browserbase.com/templates/job-application))
+controls parallel applications so we never exceed those limits.
+
+You can watch live sessions at:
+
+```
+https://browserbase.com/sessions/<sessionId>
+```
 
 ------------------------------------------------------------------------
 
@@ -84,7 +104,7 @@ applaid runs as a scheduled autonomous agent that:
     /web        → Next.js frontend + API routes
     /worker     → Cron discovery + apply runner
     /prisma     → DB schema + migrations
-    /lib        → Integrations (Tavily, Yutori, Gmail)
+    /lib        → Integrations (Tavily, Browserbase, Gmail)
     /dashboard  → UI components
 
 ------------------------------------------------------------------------
@@ -93,7 +113,7 @@ applaid runs as a scheduled autonomous agent that:
 
 All API responses share a consistent envelope:
 
-- **Success**:  
+- **Success**:
   `200`–`299`
 
   ```json
@@ -103,7 +123,7 @@ All API responses share a consistent envelope:
   }
   ```
 
-- **Error**:  
+- **Error**:
   `4xx` or `5xx`
 
   ```json
@@ -183,7 +203,7 @@ Validation is handled with **zod**; invalid input returns `400` with `code = "VA
 
 - **Purpose**: Inspect apply tasks and their latest state.
 - **Query params**:
-  - `status` (optional): one of  
+  - `status` (optional): one of
     `QUEUED | PREFILLED | SUBMITTED | NEEDS_OTP | CONFIRMED | REJECTED | FAILED`
   - `limit` (optional): integer, default `50`, max `200`.
 
@@ -211,11 +231,13 @@ Validation is handled with **zod**; invalid input returns `400` with `code = "VA
 ## 🔐 Safety Features
 
 -   Per-domain throttling
--   Optional human approval before submit
+-   Optional human approval before submit (safe mode)
+-   Browserbase concurrency limits (semaphore-controlled)
 -   Rate limiting
 -   OTP only when user-initiated
 -   Deduplication of job URLs
 -   Error tracking & retries
+-   Live session monitoring via Browserbase dashboard
 
 ------------------------------------------------------------------------
 
@@ -240,8 +262,14 @@ Create `.env`:
 
     DATABASE_URL=
     TAVILY_API_KEY=
-    YUTORI_API_KEY=
+    BROWSERBASE_API_KEY=
+    BROWSERBASE_PROJECT_ID=
+    GOOGLE_GENERATIVE_AI_API_KEY=
     GMAIL_MCP_KEY=
+
+- `BROWSERBASE_API_KEY` — from [Browserbase dashboard](https://www.browserbase.com)
+- `BROWSERBASE_PROJECT_ID` — your Browserbase project ID
+- `GOOGLE_GENERATIVE_AI_API_KEY` — used by Stagehand's AI model (Gemini 2.5 Flash) to understand forms
 
 ### 4️⃣ Run Locally
 
@@ -255,25 +283,27 @@ npm run dev
 npm run worker
 ```
 
-### 6️⃣ Manual verification (Yutori apply)
+### 6️⃣ Manual verification (Browserbase apply)
 
-To test the real Yutori Browsing API integration end-to-end:
+To test the real Browserbase + Stagehand integration end-to-end:
 
-1. **Set your API key**  
-   In `.env` (at repo root), set:
+1. **Set your API keys**
+   In `.env`, set:
    ``` env
-   YUTORI_API_KEY=your-yutori-api-key
+   BROWSERBASE_API_KEY=your-browserbase-api-key
+   BROWSERBASE_PROJECT_ID=your-project-id
+   GOOGLE_GENERATIVE_AI_API_KEY=your-google-ai-key
    ```
-   (If `YUTORI_API_KEY` is unset, the worker uses the stub adapter and no real browser runs.)
+   (If `BROWSERBASE_API_KEY` is unset, the worker uses the stub adapter and no real browser runs.)
 
-2. **Create a test ApplyTask**  
+2. **Create a test ApplyTask**
    From repo root, create one QUEUED task (plus Preference, Resume, JobLead if needed):
    ``` bash
    cd worker && npm run seed:test-apply
    ```
    This seeds a single QUEUED apply task for `test-apply@example.com` pointing at `https://example.com/job/123`.
 
-3. **Run the apply step once**  
+3. **Run the apply step once**
    From repo root:
    ``` bash
    cd worker && npm run apply:once
@@ -283,9 +313,9 @@ To test the real Yutori Browsing API integration end-to-end:
    npm run worker
    ```
 
-4. **Confirm in logs**  
-   - You should see `"event":"apply_and_update.adapter","adapter":"YutoriBrowsingAdapter"` when the key is set.
-   - With the real API, logs will show task creation and status polling (and any errors from the Yutori API).
+4. **Watch the session live**
+   - Logs will print a live session URL: `https://browserbase.com/sessions/<id>`
+   - You can watch the browser fill out the application form in real time.
 
 ------------------------------------------------------------------------
 
@@ -338,8 +368,8 @@ While you sleep.
 
 Because manually applying to jobs is:
 
--   Repetitive  
--   Time-consuming  
+-   Repetitive
+-   Time-consuming
 -   Emotionally exhausting
 
 So we automated it.
@@ -358,13 +388,13 @@ So we automated it.
 
 ## ⚠ Disclaimer
 
-applaid respects rate limits and site policies.  
+applaid respects rate limits and site policies.
 Automation should be used responsibly and ethically.
 
 ------------------------------------------------------------------------
 
 ## 🏆 Built For
 
-Hackathons.  
-Dream jobs.  
+Hackathons.
+Dream jobs.
 Rent being due.
