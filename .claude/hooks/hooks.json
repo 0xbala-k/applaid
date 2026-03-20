@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd ${CLAUDE_PROJECT_ROOT} && npm run lint 2>&1 | tail -20"
+          },
+          {
+            "type": "command",
+            "command": "cd ${CLAUDE_PROJECT_ROOT} && npx tsc --noEmit -p tsconfig.json 2>&1 | tail -20"
+          },
+          {
+            "type": "command",
+            "command": "cd ${CLAUDE_PROJECT_ROOT}/worker && npx tsc --noEmit 2>&1 | tail -20"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[hook] About to run bash command — double-check it does not bypass APPLY_SAFE_MODE or domain throttle.'"
+          }
+        ]
+      }
+    ]
+  }
+}

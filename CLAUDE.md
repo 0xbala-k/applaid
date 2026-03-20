@@ -281,3 +281,11 @@ Components follow shadcn/ui conventions using Radix UI primitives + Tailwind:
 3. **Deduplication** — Always check `dedupeHash` before inserting a `JobLead` to prevent applying to the same job twice.
 4. **Prisma migrations** — After modifying `prisma/schema.prisma`, always run `npm run prisma:migrate` and commit the generated migration file. Never edit existing migration SQL.
 5. **Batch limits** — `apply_and_update` processes a maximum of 10 tasks per run. Do not increase without reviewing Browserbase concurrency limits.
+
+---
+
+## Pre-commit
+
+Always run the `precommit` skill before finishing any coding task or committing code.
+
+Hooks automatically run lint and typecheck on every file write. The `precommit` skill adds Claude-level review (`/review`, `/simplify`), tests, and a final checklist on top of that.
