@@ -26,7 +26,8 @@ applaid/
 │       ├── yutori_adapter.ts      # Browser automation adapter (stub + real)
 │       ├── query_builder.ts       # Tavily search query generation + scoring
 │       ├── domain_throttle.ts     # Per-domain rate limiting
-│       └── retry.ts               # Error classification + exponential backoff
+│       ├── retry.ts               # Error classification + exponential backoff
+│       └── types.ts               # Shared TypeScript types (ClassifiedError, etc.)
 ├── prisma/
 │   ├── schema.prisma      # Data models
 │   └── migrations/        # Migration history
@@ -119,7 +120,8 @@ WORKER_TRIGGER_URL="http://localhost:3199"
 
 **JobLead** — Discovered job posting
 - `title`, `company`, `location`, `url`, `source` (`"tavily"`), `score` (0–1)
-- `dedupeHash` — SHA256 of canonicalized URL (prevents duplicate applications)
+- `preferenceId` — optional (`String?`); a JobLead may not always be linked to a preference
+- `dedupeHash` — SHA256 of canonicalized URL (prevents duplicate applications); indexed via `@@index([dedupeHash])` for performant duplicate lookups
 - Relations: `applyTasks[]`, `emailEvents[]`
 
 **ApplyTask** — Single application attempt
@@ -155,9 +157,11 @@ All responses use a standard envelope:
 |--------|------|-------------|
 | `POST` | `/api/preferences` | Upsert job search preferences (by email) |
 | `POST` | `/api/resume` | Ingest resume text, extract keywords |
+| `POST` | `/api/resume/upload` | Upload PDF or DOCX resume file, extract text + keywords |
 | `GET` | `/api/leads?minScore=0.8` | Fetch job leads above score threshold |
 | `GET` | `/api/tasks?status=SUBMITTED&limit=50` | List apply tasks |
 | `POST` | `/api/tasks/:id/retry` | Reset task to QUEUED for retry |
+| `POST` | `/api/apply-tasks/retry` | **Deprecated** — legacy retry route (uses raw `NextResponse.json()`); use `/api/tasks/:id/retry` instead |
 | `POST` | `/api/worker/trigger` | Manually trigger discovery + apply |
 
 Use `web/lib/api.ts` helpers (`apiSuccess`, `apiError`, `zodError`) for all API responses — do not return raw `NextResponse.json()`.
@@ -203,8 +207,8 @@ Inject the adapter into `ApplyRunner`; never instantiate adapters inside runner 
 
 ### Error Handling in Worker
 The `retry.ts` module classifies errors as terminal or retryable:
-- **Terminal** (no retry): 401, 403, 404, captcha, CAPTCHA, blocked, forbidden
-- **Retryable**: network resets, timeouts, 429, 502, 503, rate limit
+- **Terminal** (no retry): 401, 403, 404, `/captcha/i`, blocked, forbidden, `not found`, `unauthorized`, `application.*closed`, `position.*filled`
+- **Retryable**: network resets (`ECONNREFUSED`, `ENOTFOUND`, `fetch failed`, `socket hang up`), timeouts, 429, 502, 503, rate limit
 - **Unknown**: treated as retryable (safe default)
 
 Use `classifyError(err)` before deciding whether to retry or mark a task as FAILED.
@@ -241,6 +245,8 @@ cd worker && npm test         # Run tests once
 cd worker && npm run test:watch  # Watch mode
 ```
 
+> **Note**: The root-level `npm test` script is a placeholder (`echo "No tests yet"`). Always run tests from the `worker/` subdirectory directly.
+
 When writing tests:
 - Use `StubYutoriAdapter` for all apply runner tests
 - Mock Prisma with `vi.mock('../lib/prisma')` pattern
@@ -255,6 +261,16 @@ Components follow shadcn/ui conventions using Radix UI primitives + Tailwind:
 - Page-level components (dashboard, onboarding) live in `web/components/`
 - All pages are async Server Components with `export const dynamic = "force-dynamic"` for real-time data
 - Use the `cn()` utility from `web/lib/utils.ts` for conditional class merging
+
+---
+
+## Common Gotchas
+
+- **`prisma as any` in `/api/apply-tasks/retry`** — This legacy route casts Prisma to `any`, bypassing TypeScript safety. Avoid this pattern; use the typed Prisma client everywhere else.
+- **Duplicate retry route** — `/api/apply-tasks/retry` (body param) is a deprecated legacy endpoint. Always use `/api/tasks/:id/retry` (path param) which follows API conventions.
+- **Root `npm test` is a no-op** — The workspace root `package.json` has `"test": "echo \"No tests yet\""`. Run tests from `worker/` (`cd worker && npm test`).
+- **`JobLead.preferenceId` is optional** — Not every discovered lead is tied to a user preference (e.g., leads created before a preference was set). Handle `null` gracefully.
+- **Prisma singleton** — Never call `new PrismaClient()` directly. Always import from `web/lib/prisma.ts` to avoid connection pool exhaustion in Next.js dev mode.
 
 ---
 
